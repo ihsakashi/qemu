@@ -49,7 +49,7 @@ int main(int argc, char **argv)
 #endif
 #endif /* CONFIG_SDL */
 
-#ifdef CONFIG_COCOA
+#if defined(CONFIG_COCOA) || defined(CONFIG_SHARED_LIB)
 #undef main
 #define main qemu_main
 #endif /* CONFIG_COCOA */

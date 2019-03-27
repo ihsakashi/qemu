@@ -505,6 +505,7 @@ libpmem=""
 default_devices="yes"
 plugins="no"
 host_device_support="yes"
+shared_lib="no"
 
 supported_cpu="no"
 supported_os="no"
@@ -859,6 +860,7 @@ Darwin)
   darwin="yes"
   hax="yes"
   hvf="yes"
+  DSOSUF=".dylib"
   LDFLAGS_SHARED="-bundle -undefined dynamic_lookup"
   if [ "$cpu" = "x86_64" ] ; then
     QEMU_CFLAGS="-arch x86_64 $QEMU_CFLAGS"
@@ -881,7 +883,8 @@ iOS)
   ios="yes"
   hax="yes"
   hvf="yes"
-  LDFLAGS_SHARED="-bundle -undefined dynamic_lookup"
+  DSOSUF=".dylib"
+  LDFLAGS_SHARED="-dynamiclib"
   if [ "$cpu" = "x86_64" ] ; then
     QEMU_CFLAGS="-arch x86_64 $QEMU_CFLAGS"
     LDFLAGS="-arch x86_64 $LDFLAGS"
@@ -1578,6 +1581,14 @@ for opt do
   ;;
   --disable-plugins) plugins="no"
   ;;
+  --enable-shared-lib)
+      shared_lib=yes
+      want_tools=no
+      QEMU_CFLAGS="$QEMU_CFLAGS -fPIC"
+      DSOSUF="-module$DSOSUF" # fix for make 2.81 not building target order correctly
+  ;;
+  --disable-shared-lib) shared_lib=no
+  ;;
   *)
       echo "ERROR: unknown option $opt"
       echo "Try '$0 --help' for more information"
@@ -1761,6 +1772,7 @@ Advanced options (experts only):
                            track the maximum stack usage of stacks created by qemu_alloc_stack
   --enable-plugins
                            enable plugins via shared library loading
+  --enable-shared-lib      build QEMU as a shared library instead of an application
 
 Optional features, enabled with --enable-FEATURE and
 disabled with --disable-FEATURE, default is enabled if available:
@@ -6639,6 +6651,7 @@ echo "libudev           $libudev"
 echo "default devices   $default_devices"
 echo "plugin support    $plugins"
 echo "host device support  $host_device_support"
+echo "build shared lib  $shared_lib"
 
 if test "$supported_cpu" = "no"; then
     echo
@@ -6717,6 +6730,9 @@ else
 fi
 if test "$host_device_support" = "yes" ; then
   echo "CONFIG_HOST_DEVICE=y" >> $config_host_mak
+fi
+if test "$shared_lib" = "yes" ; then
+  echo "CONFIG_SHARED_LIB=y" >> $config_host_mak
 fi
 if test "$debug_tcg" = "yes" ; then
   echo "CONFIG_DEBUG_TCG=y" >> $config_host_mak

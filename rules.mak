@@ -154,6 +154,12 @@ define install-prog
 	$(if $(STRIP),$(STRIP) $(foreach T,$1,"$2/$(notdir $T)"),)
 endef
 
+# install-so list, dir
+define install-so
+    $(INSTALL_DIR) "$2"
+    $(INSTALL_LIB) $1 "$2"
+endef
+
 # find-in-path
 # Usage: $(call find-in-path, prog)
 # Looks in the PATH if the argument contains no slash, else only considers one
