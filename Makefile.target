@@ -37,6 +37,14 @@ endif
 endif
 
 PROGS=$(QEMU_PROG) $(QEMU_PROGW)
+
+ifdef CONFIG_DARWIN
+QEMU_SHARED_LIBRARY=lib$(QEMU_PROG).dylib
+else
+QEMU_SHARED_LIBRARY=lib$(QEMU_PROG).so
+endif
+SOBJS=$(QEMU_SHARED_LIBRARY)
+
 STPFILES=
 
 config-target.h: config-target.h-timestamp
@@ -98,7 +106,11 @@ stap:
 endif
 .PHONY: stap
 
+ifdef CONFIG_SHARED_LIB
+all: $(SOBJS) stap
+else
 all: $(PROGS) stap
+endif
 
 # Dummy command so that make thinks it has done something
 	@true
@@ -222,6 +234,10 @@ ifdef CONFIG_DARWIN
 	$(call quiet-command,SetFile -a C $@,"SETFILE","$(TARGET_DIR)$@")
 endif
 
+$(QEMU_SHARED_LIBRARY): QEMU_LDFLAGS += $(LDFLAGS_SHARED)
+$(QEMU_SHARED_LIBRARY): $(all-obj-y) $(COMMON_LDADDS)
+	$(call LINK, $(filter-out %.mak, $^))
+
 gdbstub-xml.c: $(TARGET_XML_FILES) $(SRC_PATH)/scripts/feature_to_c.sh
 	$(call quiet-command,rm -f $@ && $(SHELL) $(SRC_PATH)/scripts/feature_to_c.sh $@ $(TARGET_XML_FILES),"GEN","$(TARGET_DIR)$@")
 
@@ -232,7 +248,7 @@ hmp-commands-info.h: $(SRC_PATH)/hmp-commands-info.hx $(SRC_PATH)/scripts/hxtool
 	$(call quiet-command,sh $(SRC_PATH)/scripts/hxtool -h < $< > $@,"GEN","$(TARGET_DIR)$@")
 
 clean: clean-target
-	rm -f *.a *~ $(PROGS)
+	rm -f *.a *~ $(PROGS) $(SOBJS)
 	rm -f $(shell find . -name '*.[od]')
 	rm -f hmp-commands.h gdbstub-xml.c
 	rm -f trace/generated-helpers.c trace/generated-helpers.c-timestamp
@@ -257,8 +273,14 @@ $(QEMU_PROG_FUZZ): config-devices.mak $(all-obj-y) $(COMMON_LDADDS) $(fuzz-obj-y
 endif
 
 install: all
+ifdef CONFIG_SHARED_LIB
+ifneq ($(SOBJS),)
+	$(call install-so,$(SOBJS),$(DESTDIR)$(libdir))
+endif
+else
 ifneq ($(PROGS),)
 	$(call install-prog,$(PROGS),$(DESTDIR)$(bindir))
+endif
 endif
 ifdef CONFIG_TRACE_SYSTEMTAP
 	$(INSTALL_DIR) "$(DESTDIR)$(qemu_datadir)/../systemtap/tapset"

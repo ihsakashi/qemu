@@ -592,6 +592,16 @@ Makefile: $(version-obj-y)
 libqemuutil.a: $(util-obj-y) $(trace-obj-y) $(stub-obj-y)
 libvhost-user.a: $(libvhost-user-obj-y) $(util-obj-y) $(stub-obj-y)
 
+ifdef CONFIG_DARWIN
+QEMU_IMG_SHARED_LIBRARY=libqemu-img.dylib
+else
+QEMU_IMG_SHARED_LIBRARY=libqemu-img.so
+endif
+SOBJS=$(QEMU_IMG_SHARED_LIBRARY)
+ifdef CONFIG_SHARED_LIB
+all: $(SOBJS)
+endif
+
 ######################################################################
 
 COMMON_LDADDS = libqemuutil.a
@@ -599,6 +609,11 @@ COMMON_LDADDS = libqemuutil.a
 qemu-img.o: qemu-img-cmds.h
 
 qemu-img$(EXESUF): qemu-img.o $(authz-obj-y) $(block-obj-y) $(crypto-obj-y) $(io-obj-y) $(qom-obj-y) $(COMMON_LDADDS)
+
+$(QEMU_IMG_SHARED_LIBRARY): QEMU_LDFLAGS += $(LDFLAGS_SHARED)
+$(QEMU_IMG_SHARED_LIBRARY): qemu-img.o $(authz-obj-y) $(block-obj-y) $(crypto-obj-y) $(io-obj-y) $(qom-obj-y) $(COMMON_LDADDS)
+	$(call LINK, $(filter-out %.mak, $^))
+
 qemu-nbd$(EXESUF): qemu-nbd.o $(authz-obj-y) $(block-obj-y) $(crypto-obj-y) $(io-obj-y) $(qom-obj-y) $(COMMON_LDADDS)
 qemu-io$(EXESUF): qemu-io.o $(authz-obj-y) $(block-obj-y) $(crypto-obj-y) $(io-obj-y) $(qom-obj-y) $(COMMON_LDADDS)
 qemu-storage-daemon$(EXESUF): qemu-storage-daemon.o $(authz-obj-y) $(block-obj-y) $(crypto-obj-y) $(chardev-obj-y) $(io-obj-y) $(qom-obj-y) $(storage-daemon-obj-y) $(COMMON_LDADDS)
@@ -764,6 +779,7 @@ clean: recurse-clean
 		-exec rm {} +
 	rm -f $(edk2-decompressed)
 	rm -f $(filter-out %.tlb,$(TOOLS)) $(HELPERS-y) TAGS cscope.* *.pod *~ */*~
+	rm -f $(SOBJS)
 	rm -f fsdev/*.pod scsi/*.pod
 	rm -f qemu-img-cmds.h
 	rm -f ui/shader/*-vert.h ui/shader/*-frag.h
@@ -929,6 +945,11 @@ install: all $(if $(BUILD_DOCS),install-doc) \
 	recurse-install
 ifneq ($(TOOLS),)
 	$(call install-prog,$(TOOLS),$(DESTDIR)$(bindir))
+endif
+ifdef CONFIG_SHARED_LIB
+ifneq ($(SOBJS),)
+	$(call install-so,$(SOBJS),$(DESTDIR)$(libdir))
+endif
 endif
 ifneq ($(CONFIG_MODULES),)
 	$(INSTALL_DIR) "$(DESTDIR)$(qemu_moddir)"

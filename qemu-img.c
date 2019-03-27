@@ -50,6 +50,11 @@
 #include "crypto/init.h"
 #include "trace/control.h"
 
+#if defined(CONFIG_SHARED_LIB)
+#undef main
+#define main qemu_img_main
+#endif
+
 #define QEMU_IMG_VERSION "qemu-img version " QEMU_FULL_VERSION \
                           "\n" QEMU_COPYRIGHT "\n"
 
