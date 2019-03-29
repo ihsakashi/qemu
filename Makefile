@@ -550,6 +550,9 @@ CAP_CFLAGS += -DCAPSTONE_HAS_ARM64
 CAP_CFLAGS += -DCAPSTONE_HAS_POWERPC
 CAP_CFLAGS += -DCAPSTONE_HAS_X86
 
+LIBUCONTEXT_CFLAGS = $(CFLAGS) $(QEMU_CFLAGS)
+LIBUCONTEXT_CFLAGS += -DCUSTOM_IMPL
+
 .PHONY: capstone/all
 capstone/all: .git-submodule-status
 	$(call quiet-command,$(MAKE) -C $(SRC_PATH)/capstone CAPSTONE_SHARED=no BUILDDIR="$(BUILD_DIR)/capstone" CC="$(CC)" AR="$(AR)" LD="$(LD)" RANLIB="$(RANLIB)" CFLAGS="$(CAP_CFLAGS)" $(SUBDIR_MAKEFLAGS) $(BUILD_DIR)/capstone/$(LIBCAPSTONE))
@@ -561,6 +564,13 @@ slirp/all: .git-submodule-status
 		PKG_CONFIG="$(PKG_CONFIG)" 				\
 		CC="$(CC)" AR="$(AR)" 	LD="$(LD)" RANLIB="$(RANLIB)"	\
 		CFLAGS="$(QEMU_CFLAGS) $(CFLAGS)" LDFLAGS="$(QEMU_LDFLAGS)")
+
+.PHONY: libucontext/all
+libucontext/all: .git-submodule-status
+	$(call quiet-command,$(MAKE) -C $(SRC_PATH)/libucontext \
+		ARCH="$(ARCH)" BUILD_DIR="$(BUILD_DIR)/libucontext" \
+		CC="$(CC)" AR="$(AR)" LD="$(LD)" RANLIB="$(RANLIB)" \
+		CFLAGS="$(LIBUCONTEXT_CFLAGS)" LDFLAGS="$(QEMU_LDFLAGS)")
 
 $(filter %/all, $(TARGET_DIRS_RULES)): libqemuutil.a $(common-obj-y) \
 	$(qom-obj-y)

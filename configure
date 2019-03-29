@@ -1870,7 +1870,7 @@ Advanced options (experts only):
   --oss-lib                path to OSS library
   --cpu=CPU                Build for host CPU [$cpu]
   --with-coroutine=BACKEND coroutine backend. Supported options:
-                           ucontext, sigaltstack, windows
+                           ucontext, libucontext, sigaltstack, windows
   --enable-gcov            enable test coverage analysis with gcov
   --gcov=GCOV              use specified gcov [$gcov_tool]
   --disable-blobs          disable installing provided firmware blobs
@@ -5670,6 +5670,8 @@ if test "$coroutine" = ""; then
     coroutine=win32
   elif test "$ucontext_works" = "yes"; then
     coroutine=ucontext
+  elif test "$ios" = "yes"; then
+    coroutine=libucontext
   else
     coroutine=sigaltstack
   fi
@@ -5693,10 +5695,27 @@ else
       error_exit "only the 'windows' coroutine backend is valid for Windows"
     fi
     ;;
+  libucontext)
+  ;;
   *)
     error_exit "unknown coroutine backend $coroutine"
     ;;
   esac
+fi
+
+case $coroutine in
+libucontext)
+  git_submodules="${git_submodules} libucontext"
+  mkdir -p libucontext
+  QEMU_CFLAGS="$QEMU_CFLAGS -I\$(SRC_PATH)/libucontext/include"
+  LIBS="-L\$(BUILD_DIR)/libucontext -lucontext $LIBS"
+  ;;
+esac
+
+if test "$coroutine" == "libucontext"; then
+  coroutine_impl=ucontext
+else
+  coroutine_impl=$coroutine
 fi
 
 if test "$coroutine_pool" = ""; then
@@ -7705,7 +7724,7 @@ if test "$rbd" = "yes" ; then
   echo "RBD_LIBS=$rbd_libs" >> $config_host_mak
 fi
 
-echo "CONFIG_COROUTINE_BACKEND=$coroutine" >> $config_host_mak
+echo "CONFIG_COROUTINE_BACKEND=$coroutine_impl" >> $config_host_mak
 if test "$coroutine_pool" = "yes" ; then
   echo "CONFIG_COROUTINE_POOL=1" >> $config_host_mak
 else
@@ -8566,6 +8585,10 @@ if [ "$fdt" = "git" ]; then
 fi
 if [ "$capstone" = "git" -o "$capstone" = "internal" ]; then
   echo "config-host.h: capstone/all" >> $config_host_mak
+fi
+if [ "$coroutine" = "libucontext" ]; then
+  echo "config-host.h: libucontext/all" >> $config_host_mak
+  echo "CONFIG_LIBUCONTEXT=y" >> $config_host_mak
 fi
 if test -n "$LIBCAPSTONE"; then
   echo "LIBCAPSTONE=$LIBCAPSTONE" >> $config_host_mak
