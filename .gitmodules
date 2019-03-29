@@ -61,3 +61,6 @@
 [submodule "roms/qboot"]
 	path = roms/qboot
 	url = https://github.com/bonzini/qboot
+[submodule "libucontext"]
+	path = libucontext
+	url = https://github.com/halts/libucontext.git
