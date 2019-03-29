@@ -33,6 +33,9 @@ tb_lookup__cpu_state(CPUState *cpu, target_ulong *pc, target_ulong *cs_base,
     cf_mask |= cpu->cluster_index << CF_CLUSTER_SHIFT;
 
     if (likely(tb &&
+#if defined(CONFIG_NO_RWX)
+               tb_is_exec(tb) &&
+#endif
                tb->pc == *pc &&
                tb->cs_base == *cs_base &&
                tb->flags == *flags &&

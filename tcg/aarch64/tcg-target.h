@@ -122,7 +122,12 @@ typedef enum {
 #define TCG_TARGET_HAS_muls2_i64        0
 #define TCG_TARGET_HAS_muluh_i64        1
 #define TCG_TARGET_HAS_mulsh_i64        1
+
+#if defined(CONFIG_NO_RWX) // In iOS, we have to unlock exe memory which is very slow
+#define TCG_TARGET_HAS_direct_jump      0
+#else
 #define TCG_TARGET_HAS_direct_jump      1
+#endif
 
 #define TCG_TARGET_HAS_v64              1
 #define TCG_TARGET_HAS_v128             1

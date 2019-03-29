@@ -1030,7 +1030,11 @@ static inline void *alloc_code_gen_buffer(void)
 #else
 static inline void *alloc_code_gen_buffer(void)
 {
+#if defined(CONFIG_NO_RWX) // iOS requires W^X
+    int prot = PROT_WRITE | PROT_READ;
+#else
     int prot = PROT_WRITE | PROT_READ | PROT_EXEC;
+#endif
     int flags = MAP_PRIVATE | MAP_ANONYMOUS;
     uintptr_t start = 0;
     size_t size = tcg_ctx->code_gen_buffer_size;
@@ -1124,6 +1128,9 @@ static bool tb_cmp(const void *ap, const void *bp)
     const TranslationBlock *b = bp;
 
     return a->pc == b->pc &&
+#if defined(CONFIG_NO_RWX) // check if from different regions
+        a->p_code_locked_top_page == b->p_code_locked_top_page &&
+#endif
         a->cs_base == b->cs_base &&
         a->flags == b->flags &&
         (tb_cflags(a) & CF_HASH_MASK) == (tb_cflags(b) & CF_HASH_MASK) &&
@@ -1754,6 +1761,10 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     ti = profile_getclock();
 #endif
 
+#if defined(CONFIG_NO_RWX)
+    tcg_exec_memory_unlock(tcg_ctx);
+#endif
+
     gen_code_size = tcg_gen_code(tcg_ctx, tb);
     if (unlikely(gen_code_size < 0)) {
         switch (gen_code_size) {
@@ -1868,9 +1879,19 @@ TranslationBlock *tb_gen_code(CPUState *cpu,
     if (unlikely(existing_tb != tb)) {
         uintptr_t orig_aligned = (uintptr_t)gen_code_buf;
 
+#if defined(CONFIG_NO_RWX)
+        g_assert(tcg_ctx->nb_tbs > 0);
+        atomic_dec(&tcg_ctx->nb_tbs);
+#else // if TB is allocated in the code buffer
         orig_aligned -= ROUND_UP(sizeof(*tb), qemu_icache_linesize);
+#endif
         atomic_set(&tcg_ctx->code_gen_ptr, (void *)orig_aligned);
         return existing_tb;
+    } else {
+#if defined(CONFIG_NO_RWX)
+        /* count total size of code blocks */
+        tcg_ctx->tb_total_sizes += ((uintptr_t)tcg_ctx->code_gen_ptr - (uintptr_t)gen_code_buf);
+#endif
     }
     tcg_tb_insert(tb);
     return tb;
@@ -2674,3 +2695,22 @@ void tcg_flush_softmmu_tlb(CPUState *cs)
     tlb_flush(cs);
 #endif
 }
+
+#if defined(CONFIG_NO_RWX)
+void tb_exec_memory_lock(void)
+{
+    tcg_exec_memory_lock(tcg_ctx);
+}
+
+/* We can execute a TB if it's either 1) running on the same thread 
+ * as the current tcg_ctx or 2) below the exec locked water mark.
+ */
+bool tb_is_exec(const TranslationBlock *tb)
+{
+    const void *code_locked_top_page;
+
+    code_locked_top_page = atomic_read(tb->p_code_locked_top_page);
+    return code_locked_top_page == tcg_ctx->code_locked_top_page || 
+           code_locked_top_page >= tb->tc.ptr + tb->tc.size;
+}
+#endif // defined(CONFIG_NO_RWX)

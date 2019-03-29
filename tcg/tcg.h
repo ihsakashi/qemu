@@ -625,6 +625,25 @@ struct TCGContext {
     void *code_gen_ptr;
     void *data_gen_ptr;
 
+#if defined(CONFIG_NO_RWX)
+    /* Code memory locking/unlocking. On W^X platforms, we need to keep 
+       track of when a page is RW or RX. We take advantage of the fact 
+       that generated code only grows downwards so at any point in time 
+       we only need to have 1 or 0 page unlocked. */
+    int code_locked;
+    void *code_locked_top_page;
+
+    /* On iOS we cannot store TB before the code buffer because of W^X
+       therefore we need to allocate from some other region of memory. */
+    TranslationBlock *tbs;
+    size_t nb_tbs;
+    size_t code_gen_max_blocks;
+
+    /* We can compute the average size of TB blocks last flush and use 
+       that to compute the number of blocks needed next flush. */
+    uint64_t tb_total_sizes;
+#endif
+
     /* Threshold to flush the translated code buffer.  */
     void *code_gen_highwater;
 
@@ -1215,6 +1234,12 @@ uintptr_t tcg_qemu_tb_exec(CPUArchState *env, uint8_t *tb_ptr);
 #endif
 
 void tcg_register_jit(void *buf, size_t buf_size);
+
+#if defined(CONFIG_NO_RWX)
+void tcg_exec_memory_unlock(TCGContext *s);
+void tcg_exec_memory_lock(TCGContext *s);
+void tcg_exec_memory_destroy(void *start, size_t len);
+#endif
 
 #if TCG_TARGET_MAYBE_vec
 /* Return zero if the tuple (opc, type, vece) is unsupportable;

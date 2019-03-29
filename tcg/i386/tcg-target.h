@@ -133,7 +133,11 @@ extern bool have_avx2;
 #define TCG_TARGET_HAS_muluh_i32        0
 #define TCG_TARGET_HAS_mulsh_i32        0
 #define TCG_TARGET_HAS_goto_ptr         1
+#if defined(CONFIG_NO_RWX) // In iOS, we have to unlock exe memory which is very slow
+#define TCG_TARGET_HAS_direct_jump      0
+#else
 #define TCG_TARGET_HAS_direct_jump      1
+#endif
 
 #if TCG_TARGET_REG_BITS == 64
 /* Keep target addresses zero-extended in a register.  */

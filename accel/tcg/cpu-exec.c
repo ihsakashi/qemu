@@ -169,6 +169,18 @@ static inline tcg_target_ulong cpu_tb_exec(CPUState *cpu, TranslationBlock *itb)
     }
 #endif /* DEBUG_DISAS */
 
+#if defined(CONFIG_NO_RWX)
+    /* We only have to lock the exec memory if we are trying to exec a 
+     * block in a page that is potentially unlocked. If we are using a 
+     * old block that is under the water mark for unlocked page, then 
+     * it is fine to execute without locking anything. We must make 
+     * sure that any cached jumps do not go into potentially unlocked 
+     * memory here. */
+    if (*itb->p_code_locked_top_page < itb->tc.ptr + itb->tc.size) {
+        tb_exec_memory_lock();
+    }
+#endif
+
     ret = tcg_qemu_tb_exec(env, tb_ptr);
     cpu->can_do_io = 1;
     last_tb = (TranslationBlock *)(ret & ~TB_EXIT_MASK);
@@ -297,6 +309,9 @@ static bool tb_lookup_cmp(const void *p, const void *d)
     const struct tb_desc *desc = d;
 
     if (tb->pc == desc->pc &&
+#if defined(CONFIG_NO_RWX)
+        tb_is_exec(tb) &&
+#endif
         tb->page_addr[0] == desc->phys_page1 &&
         tb->cs_base == desc->cs_base &&
         tb->flags == desc->flags &&
@@ -418,8 +433,21 @@ static inline TranslationBlock *tb_find(CPUState *cpu,
     }
 #endif
     /* See if we can patch the calling TB. */
+
     if (last_tb) {
-        tb_add_jump(last_tb, tb_exit, tb);
+#if defined(CONFIG_NO_RWX)
+        /* In case of exec locked/unlocked pages, we don't want to link to a page 
+         * that can potentially be unlocked. Therefore, we delay the jump linking 
+         * until the next time we fetch it and we know the unlocked watermark is 
+         * above the tb OR if it ends in the same page as last_tb. */
+        if (((uintptr_t)(last_tb->tc.ptr + last_tb->tc.size - 1) & qemu_host_page_mask) ==
+            ((uintptr_t)(tb->tc.ptr + tb->tc.size) & qemu_host_page_mask) || 
+            (*tb->p_code_locked_top_page >= tb->tc.ptr + tb->tc.size)) {
+#endif // defined(CONFIG_NO_RWX)
+            tb_add_jump(last_tb, tb_exit, tb);
+#if defined(CONFIG_NO_RWX)
+        }
+#endif // defined(CONFIG_NO_RWX)
     }
     return tb;
 }

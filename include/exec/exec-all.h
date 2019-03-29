@@ -430,7 +430,11 @@ struct TranslationBlock {
     uintptr_t jmp_list_head;
     uintptr_t jmp_list_next[2];
     uintptr_t jmp_dest[2];
-};
+#if defined(CONFIG_NO_RWX)
+    /* Reference to code_locked_top_page in tcg_ctx */
+    void * const *p_code_locked_top_page;
+#endif
+} __attribute__((aligned(TB_EXIT_MASK+1)));
 
 extern bool parallel_cpus;
 
@@ -578,6 +582,12 @@ void tlb_set_dirty(CPUState *cpu, target_ulong vaddr);
 
 /* exec.c */
 void tb_flush_jmp_cache(CPUState *cpu, target_ulong addr);
+
+/* translate-all.c */
+#if defined(CONFIG_NO_RWX)
+void tb_exec_memory_lock(void);
+bool tb_is_exec(const TranslationBlock *tb);
+#endif
 
 MemoryRegionSection *
 address_space_translate_for_iotlb(CPUState *cpu, int asidx, hwaddr addr,

@@ -157,6 +157,10 @@ static int tcg_out_ldst_finalize(TCGContext *s);
 
 #define TCG_HIGHWATER 1024
 
+/* For computing the average TB code size, if we seen below this threshold, 
+   then the average is not meaningful and we ignore it. */
+#define TCG_TB_SEEN_THRESHOLD 10
+
 static TCGContext **tcg_ctxs;
 static unsigned int n_tcg_ctxs;
 TCGv_env cpu_env = 0;
@@ -535,6 +539,36 @@ static void tcg_region_bounds(size_t curr_region, void **pstart, void **pend)
     *pend = end;
 }
 
+#if defined(CONFIG_NO_RWX)
+/*
+ * Called before clearing the TBs from last flush.
+ * Uses the average code block size from the last flush
+ * to set aside a chunk of memory for future translations.
+ * `buffer` must be page aligned
+ */
+static void tcg_tbs_alloc(TCGContext *s)
+{
+    size_t average_block_size;
+
+    if (s->nb_tbs < TCG_TB_SEEN_THRESHOLD) {
+        average_block_size = CODE_GEN_AVG_BLOCK_SIZE;
+    } else {
+        average_block_size = s->tb_total_sizes / s->nb_tbs;
+    }
+
+    s->code_gen_max_blocks = s->code_gen_buffer_size / (sizeof(TranslationBlock) + average_block_size);
+    s->tbs = s->code_gen_ptr;
+    /* if buffer is start of region, it should already be aligned */
+    g_assert(((uintptr_t)s->tbs & ~qemu_host_page_mask) == 0);
+    /* Sanity check since we need bottom 2 bits zero. page_mask should cover this. */
+    g_assert(((uintptr_t)s->tbs & TB_EXIT_MASK) == 0);
+    s->code_gen_ptr = (void *)ROUND_UP((uintptr_t)&s->tbs[s->code_gen_max_blocks], qemu_host_page_size);
+    g_assert(s->code_gen_ptr < s->code_gen_highwater);
+    s->nb_tbs = 0;
+    s->tb_total_sizes = 0;
+}
+#endif // defined(CONFIG_NO_RWX)
+
 static void tcg_region_assign(TCGContext *s, size_t curr_region)
 {
     void *start, *end;
@@ -545,6 +579,13 @@ static void tcg_region_assign(TCGContext *s, size_t curr_region)
     s->code_gen_ptr = start;
     s->code_gen_buffer_size = end - start;
     s->code_gen_highwater = end - TCG_HIGHWATER;
+
+#if defined(CONFIG_NO_RWX)
+    tcg_tbs_alloc(s);
+    s->code_locked = 0;
+    g_assert(((uintptr_t)s->code_gen_ptr & ~qemu_host_page_mask) == 0);
+    s->code_locked_top_page = s->code_gen_ptr;
+#endif
 }
 
 static bool tcg_region_alloc__locked(TCGContext *s)
@@ -594,6 +635,10 @@ void tcg_region_reset_all(void)
     qemu_mutex_lock(&region.lock);
     region.current = 0;
     region.agg_size_full = 0;
+#if defined(CONFIG_NO_RWX)
+        /* unlock any locked pages from before */
+        tcg_exec_memory_destroy(region.start, region.end - region.start);
+#endif
 
     for (i = 0; i < n_ctxs; i++) {
         TCGContext *s = atomic_read(&tcg_ctxs[i]);
@@ -687,6 +732,11 @@ void tcg_region_init(void)
     size_t i;
 
     n_regions = tcg_n_regions();
+
+#if defined(CONFIG_NO_RWX)
+    /* We shouldn't be translating code yet, so it should not be locked */
+    g_assert(!tcg_init_ctx.code_locked);
+#endif
 
     /* The first region will be 'aligned - buf' bytes larger than the others */
     aligned = QEMU_ALIGN_PTR_UP(buf, page_size);
@@ -1018,6 +1068,30 @@ void tcg_context_init(TCGContext *s)
  */
 TranslationBlock *tcg_tb_alloc(TCGContext *s)
 {
+#if defined(CONFIG_NO_RWX)
+    TranslationBlock *tb;
+    int nb_tbs;
+
+retry:
+    /* artifical limit of TBs buffer reached OR we hit highwater mark */
+    nb_tbs = atomic_fetch_inc(&s->nb_tbs);
+    if (unlikely(nb_tbs >= s->code_gen_max_blocks ||
+        s->code_gen_ptr > s->code_gen_highwater)) {
+        // lock this region before moving to the next one
+        tcg_exec_memory_lock(s);
+        if (tcg_region_alloc(s)) {
+            return NULL;
+        }
+        goto retry;
+    }
+    /* we have a tb to work with */
+    tb = &s->tbs[nb_tbs];
+    tb->p_code_locked_top_page = &s->code_locked_top_page;
+    /* bottom two bits used in exit_tb, must be zero */
+    g_assert(((uintptr_t)tb & TB_EXIT_MASK) == 0);
+    s->data_gen_ptr = NULL;
+    return tb;
+#else // !defined(CONFIG_NO_RWX)
     uintptr_t align = qemu_icache_linesize;
     TranslationBlock *tb;
     void *next;
@@ -1035,6 +1109,7 @@ TranslationBlock *tcg_tb_alloc(TCGContext *s)
     atomic_set(&s->code_gen_ptr, next);
     s->data_gen_ptr = NULL;
     return tb;
+#endif // defined(CONFIG_NO_RWX)
 }
 
 void tcg_prologue_init(TCGContext *s)
@@ -1070,16 +1145,33 @@ void tcg_prologue_init(TCGContext *s)
     }
 #endif
 
+#if defined(CONFIG_NO_RWX)
+    /* We need to mark prolog page as W^X, so align to page */
+    s->code_ptr = (void *)ROUND_UP((uintptr_t)s->code_ptr, qemu_host_page_size);
+#endif
+
     buf1 = s->code_ptr;
+    prologue_size = tcg_current_code_size(s);
     flush_icache_range((uintptr_t)buf0, (uintptr_t)buf1);
 
     /* Deduct the prologue from the buffer.  */
-    prologue_size = tcg_current_code_size(s);
     s->code_gen_ptr = buf1;
     s->code_gen_buffer = buf1;
     s->code_buf = buf1;
     total_size -= prologue_size;
     s->code_gen_buffer_size = total_size;
+
+#if defined(CONFIG_NO_RWX)
+    tcg_tbs_alloc(s);
+    /* Mark prologue as executable */
+    if (mprotect(buf0, prologue_size, PROT_READ | PROT_EXEC) < 0) {
+        fprintf(stderr, "Failed to lock exec memory\n");
+        exit(1);
+    }
+    g_assert(((uintptr_t)buf1 & ~qemu_host_page_mask) == 0);
+    s->code_locked = 0;
+    s->code_locked_top_page = buf1;
+#endif
 
     tcg_register_jit(s->code_gen_buffer, total_size);
 
@@ -4569,3 +4661,47 @@ void tcg_expand_vec_op(TCGOpcode o, TCGType t, unsigned e, TCGArg a0, ...)
     g_assert_not_reached();
 }
 #endif
+
+#if defined(CONFIG_NO_RWX)
+void tcg_exec_memory_unlock(TCGContext *s)
+{
+    /* We only need to unlock the top page as all the pages above it are 
+       still unlocked */
+    if (s->code_locked)
+    {
+        if (mprotect(s->code_locked_top_page, qemu_host_page_size, PROT_READ | PROT_WRITE) < 0)
+        {
+            fprintf(stderr, "Failed to lock exec memory\n");
+            exit(1);
+        }
+        s->code_locked = 0;
+    }
+}
+
+void tcg_exec_memory_lock(TCGContext *s)
+{
+    if (!s->code_locked)
+    {
+        void *old_top = s->code_locked_top_page;
+        void *new_top = (void *)((uintptr_t)s->code_gen_ptr & qemu_host_page_mask);
+        if (mprotect(old_top, (new_top - old_top) + qemu_host_page_size, PROT_READ | PROT_EXEC) < 0)
+        {
+            fprintf(stderr, "Failed to unlock exec memory\n");
+            exit(1);
+        }
+        s->code_locked_top_page = new_top;
+        s->code_locked = 1;
+    }
+}
+
+void tcg_exec_memory_destroy(void *start, size_t len)
+{
+    g_assert(((uintptr_t)start & ~qemu_host_page_mask) == 0);
+    g_assert((len & ~qemu_host_page_mask) == 0);
+    if (mprotect(start, len, PROT_READ | PROT_WRITE) < 0)
+    {
+        fprintf(stderr, "Failed to unlock exec memory\n");
+        exit(1);
+    }
+}
+#endif // defined(CONFIG_NO_RWX)

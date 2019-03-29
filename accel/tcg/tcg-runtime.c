@@ -155,6 +155,15 @@ void *HELPER(lookup_tb_ptr)(CPUArchState *env)
     if (tb == NULL) {
         return tcg_ctx->code_gen_epilogue;
     }
+#if defined(CONFIG_NO_RWX)
+    /* In the corner case that we're executing WITHOUT locking the exec memory 
+     * because the first TB was below the locked mem water level, then we have 
+     * to lock the mem here. */
+    if (tcg_ctx->code_locked_top_page == *tb->p_code_locked_top_page &&
+        tcg_ctx->code_locked_top_page < tb->tc.ptr + tb->tc.size) {
+        tb_exec_memory_lock();
+    }
+#endif
     qemu_log_mask_and_addr(CPU_LOG_EXEC, pc,
                            "Chain %d: %p ["
                            TARGET_FMT_lx "/" TARGET_FMT_lx "/%#x] %s\n",
