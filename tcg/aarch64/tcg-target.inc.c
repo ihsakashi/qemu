@@ -1898,8 +1898,15 @@ static void tcg_out_op(TCGContext *s, TCGOpcode opc,
         } else {
             /* !TCG_TARGET_HAS_direct_jump */
             tcg_debug_assert(s->tb_jmp_target_addr != NULL);
-            intptr_t offset = tcg_pcrel_diff(s, (s->tb_jmp_target_addr + a0)) >> 2;
-            tcg_out_insn(s, 3305, LDR, offset, TCG_REG_TMP);
+            uintptr_t target_addr = (uintptr_t)(s->tb_jmp_target_addr + a0);
+            ptrdiff_t offset = tcg_pcrel_diff(s, (void *)target_addr);
+            if (offset < 0x100000 && offset > -0x100000) { // check it's in +/- 1MiB range
+                tcg_out_insn(s, 3305, LDR, offset >> 2, TCG_REG_TMP);
+            } else { // TODO: what if +/- 4GiB is not enough?
+                offset = (target_addr >> 12) - ((uintptr_t)s->code_ptr >> 12);
+                tcg_out_insn(s, 3406, ADRP, TCG_REG_TMP, offset);
+                tcg_out_ld(s, TCG_TYPE_PTR, TCG_REG_TMP, TCG_REG_TMP, target_addr & 0xfff);
+            }
         }
         tcg_out_insn(s, 3207, BR, TCG_REG_TMP);
         set_jmp_reset_offset(s, a0);
