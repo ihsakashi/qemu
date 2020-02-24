@@ -195,6 +195,13 @@ static inline void flush_icache_range(uintptr_t start, uintptr_t stop)
 {
 }
 
+#if defined(CONFIG_IOS_JIT)
+static inline void flush_dcache_range(uintptr_t start, uintptr_t stop)
+{
+#error "Unimplemented dcache flush function"
+}
+#endif
+
 /* We could notice __i386__ or __s390x__ and reduce the barriers depending
    on the host.  But if you want performance, you use the normal backend.
    We prefer consistency across hosts on this.  */
@@ -203,11 +210,15 @@ static inline void flush_icache_range(uintptr_t start, uintptr_t stop)
 #define TCG_TARGET_HAS_MEMORY_BSWAP     1
 
 static inline void tb_target_set_jmp_target(uintptr_t tc_ptr,
-                                            uintptr_t jmp_addr, uintptr_t addr)
+                                            uintptr_t jmp_addr, uintptr_t addr,
+                                            uintptr_t wr_addr)
 {
     /* patch the branch destination */
     atomic_set((int32_t *)jmp_addr, addr - (jmp_addr + 4));
     /* no need to flush icache explicitly */
+#if defined(CONFIG_IOS_JIT)
+    flush_dcache_range(wr_addr, wr_addr + 4);
+#endif
 }
 
 #endif /* TCG_TARGET_H */
