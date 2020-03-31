@@ -918,7 +918,7 @@ iOS)
   host_device_support="no"
   audio_drv_list=""
   audio_possible_drivers=""
-  QEMU_LDFLAGS="-framework CoreFoundation $QEMU_LDFLAGS"
+  QEMU_LDFLAGS="-framework CoreFoundation -lresolv $QEMU_LDFLAGS"
   # Disable attempts to use ObjectiveC features in os/object.h since they
   # won't work when we're compiling with gcc as a C compiler.
   QEMU_CFLAGS="-DOS_OBJECT_USE_OBJC=0 $QEMU_CFLAGS"
