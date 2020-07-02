@@ -861,7 +861,7 @@ Darwin)
   hax="yes"
   hvf="yes"
   DSOSUF=".dylib"
-  LDFLAGS_SHARED="-bundle -undefined dynamic_lookup"
+  LDFLAGS_SHARED="-dynamiclib -undefined dynamic_lookup"
   if [ "$cpu" = "x86_64" ] ; then
     QEMU_CFLAGS="-arch x86_64 $QEMU_CFLAGS"
     LDFLAGS="-arch x86_64 $LDFLAGS"
