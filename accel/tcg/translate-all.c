@@ -1094,12 +1094,16 @@ static inline void *alloc_code_gen_buffer(bool no_rwx_pages)
 #else
 static inline void *alloc_code_gen_buffer(bool no_rwx_pages)
 {
+#if defined(CONFIG_TCG_INTERPRETER)
+    int prot = PROT_READ;
+#else
     int prot = PROT_READ | PROT_EXEC;
+#endif
     int flags = MAP_PRIVATE | MAP_ANONYMOUS;
     size_t size = tcg_ctx->code_gen_buffer_size;
     void *buf;
 
-#if defined(CONFIG_DARWIN) // both iOS and macOS (Apple Silicon) applicable
+#if defined(CONFIG_DARWIN) && !defined(CONFIG_TCG_INTERPRETER) // both iOS and macOS (Apple Silicon) applicable
     if (!no_rwx_pages) {
         prot |= PROT_WRITE;
         flags |= MAP_JIT;

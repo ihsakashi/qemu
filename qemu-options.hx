@@ -124,7 +124,9 @@ DEF("accel", HAS_ARG, QEMU_OPTION_accel,
     "                kernel-irqchip=on|off|split controls accelerated irqchip support (default=on)\n"
     "                kvm-shadow-mem=size of KVM shadow MMU in bytes\n"
 #ifdef CONFIG_IOS_JIT
+#ifndef CONFIG_TCG_INTERPRETER
     "                mirror-rwx=on|off (mirror map executable pages for TCG on iOS)\n"
+#endif
 #endif
     "                tb-size=n (TCG translation block cache size)\n"
     "                thread=single|multi (enable multi-threaded TCG)\n", QEMU_ARCH_ALL)

@@ -193,7 +193,7 @@ static void tcg_set_tb_size(Object *obj, Visitor *v,
     s->tb_size = value;
 }
 
-#ifdef CONFIG_IOS_JIT
+#if defined(CONFIG_IOS_JIT) && !defined(CONFIG_TCG_INTERPRETER)
 static bool tcg_get_mirror_rwx(Object *obj, Error **errp)
 {
     TCGState *s = TCG_STATE(obj);
@@ -226,7 +226,7 @@ static void tcg_accel_class_init(ObjectClass *oc, void *data)
     object_class_property_set_description(oc, "tb-size",
         "TCG translation block cache size");
 
-#ifdef CONFIG_IOS_JIT
+#if defined(CONFIG_IOS_JIT) && !defined(CONFIG_TCG_INTERPRETER)
     object_class_property_add_bool(oc, "mirror-rwx",
         tcg_get_mirror_rwx, tcg_set_mirror_rwx);
     object_class_property_set_description(oc, "mirror-rwx",

@@ -198,7 +198,6 @@ static inline void flush_icache_range(uintptr_t start, uintptr_t stop)
 #if defined(CONFIG_IOS_JIT)
 static inline void flush_dcache_range(uintptr_t start, uintptr_t stop)
 {
-#error "Unimplemented dcache flush function"
 }
 #endif
 
@@ -216,9 +215,6 @@ static inline void tb_target_set_jmp_target(uintptr_t tc_ptr,
     /* patch the branch destination */
     atomic_set((int32_t *)jmp_addr, addr - (jmp_addr + 4));
     /* no need to flush icache explicitly */
-#if defined(CONFIG_IOS_JIT)
-    flush_dcache_range(wr_addr, wr_addr + 4);
-#endif
 }
 
 #endif /* TCG_TARGET_H */
