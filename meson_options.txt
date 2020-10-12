@@ -6,6 +6,8 @@ option('qemu_firmwarepath', type : 'string', value : '',
        description: 'search PATH for firmware files')
 option('sphinx_build', type : 'string', value : '',
        description: 'Use specified sphinx-build [$sphinx_build] for building document (default to be empty)')
+option('shared-lib', type : 'boolean', value : false,
+       description: 'build QEMU as a shared library')
 
 option('docs', type : 'feature', value : 'auto',
        description: 'Documentations build support')
