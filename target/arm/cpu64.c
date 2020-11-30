@@ -25,6 +25,9 @@
 #if !defined(CONFIG_USER_ONLY)
 #include "hw/loader.h"
 #endif
+#ifdef CONFIG_HVF
+#include "hvf/hvf_arm.h"
+#endif
 #include "sysemu/kvm.h"
 #include "kvm_arm.h"
 #include "qapi/visitor.h"
@@ -734,6 +737,20 @@ static const ARMCPUInfo aarch64_cpus[] = {
     { .name = "max",                .initfn = aarch64_max_initfn },
 };
 
+#ifdef CONFIG_HVF
+static void arm_hvf_host_initfn(Object *obj)
+{
+    ARMCPU *cpu = ARM_CPU(obj);
+    hvf_arm_set_cpu_features_from_host(cpu);
+}
+
+static const ARMCPUInfo host_arm_cpu_type_info = {
+    .name = "host",
+    .initfn = arm_hvf_host_initfn,
+};
+
+#endif
+
 static bool aarch64_cpu_get_aarch64(Object *obj, Error **errp)
 {
     ARMCPU *cpu = ARM_CPU(obj);
@@ -843,6 +860,10 @@ static void aarch64_cpu_register_types(void)
     for (i = 0; i < ARRAY_SIZE(aarch64_cpus); ++i) {
         aarch64_cpu_register(&aarch64_cpus[i]);
     }
+    
+#ifdef CONFIG_HVF
+    aarch64_cpu_register(&host_arm_cpu_type_info);
+#endif
 }
 
 type_init(aarch64_cpu_register_types)

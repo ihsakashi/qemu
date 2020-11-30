@@ -26,6 +26,7 @@
 #include "sysemu/cpus.h"
 #include "target/arm/cpu.h"
 #include "target/arm/internals.h"
+#include "hvf_arm.h"
 
 #define HVF_DEBUG 0
 #define DPRINTF(...)                                        \
@@ -294,6 +295,17 @@ static uint64_t hvf_get_reg(CPUState *cpu, int rt)
     return val;
 }
 
+static uint64_t hvf_get_feature_reg(hv_vcpu_config_t config, hv_feature_reg_t reg)
+{
+    uint64_t val = 0;
+    hv_return_t r;
+
+    r = hv_vcpu_config_get_feature_reg(config, reg, &val);
+    assert_hvf_ok(r);
+
+    return val;
+}
+
 void hvf_arch_vcpu_destroy(CPUState *cpu)
 {
 }
@@ -316,6 +328,68 @@ int hvf_arch_init_vcpu(CPUState *cpu)
                               &arm_cpu->isar.id_aa64mmfr0);
 
     return 0;
+}
+
+void hvf_arm_set_cpu_features_from_host(ARMCPU *cpu)
+{    
+    cpu->dtb_compatible = "arm,apple";
+    
+    hv_vcpu_config_t cfg = hv_vcpu_config_create();
+    
+    uint64_t data_cache[8] = { 0 };
+    hv_vcpu_config_get_ccsidr_el1_sys_reg_values(
+        cfg,
+        HV_CACHE_TYPE_DATA,
+        (uint64_t *)&data_cache
+    );
+    
+    for (int i = 0; i < 8; i++) {
+        if (data_cache[i] != 0) {
+            cpu->ccsidr[i*2] = data_cache[i];
+        } else {
+            break;
+        }
+    }
+    
+    uint64_t instruction_cache[8] = { 0 };
+    hv_vcpu_config_get_ccsidr_el1_sys_reg_values(
+        cfg,
+        HV_CACHE_TYPE_INSTRUCTION,
+        (uint64_t *)&instruction_cache
+    );
+    
+    for (int i = 0; i < 8; i++) {
+        if (instruction_cache[i] != 0) {
+            cpu->ccsidr[i*2+1] = instruction_cache[i];
+        } else {
+            break;
+        }
+    }
+    
+    cpu->reset_sctlr = 0x00c50838;
+        
+    cpu->isar.id_aa64pfr0 = hvf_get_feature_reg(cfg, HV_FEATURE_REG_ID_AA64PFR0_EL1);
+    cpu->isar.id_aa64pfr1 = hvf_get_feature_reg(cfg, HV_FEATURE_REG_ID_AA64PFR1_EL1);
+    cpu->isar.id_aa64dfr0 = hvf_get_feature_reg(cfg, HV_FEATURE_REG_ID_AA64DFR0_EL1);
+    cpu->isar.id_aa64dfr1 = hvf_get_feature_reg(cfg, HV_FEATURE_REG_ID_AA64DFR1_EL1);
+    cpu->isar.id_aa64isar0 = hvf_get_feature_reg(cfg, HV_FEATURE_REG_ID_AA64ISAR0_EL1);
+    cpu->isar.id_aa64isar1 = hvf_get_feature_reg(cfg, HV_FEATURE_REG_ID_AA64ISAR1_EL1);
+    cpu->isar.id_aa64mmfr0 = hvf_get_feature_reg(cfg, HV_FEATURE_REG_ID_AA64MMFR0_EL1);
+    cpu->isar.id_aa64mmfr1 = hvf_get_feature_reg(cfg, HV_FEATURE_REG_ID_AA64MMFR1_EL1);
+    cpu->isar.id_aa64mmfr2 = hvf_get_feature_reg(cfg, HV_FEATURE_REG_ID_AA64MMFR2_EL1);
+    
+    cpu->ctr = hvf_get_feature_reg(cfg, HV_FEATURE_REG_CTR_EL0);
+    cpu->clidr = hvf_get_feature_reg(cfg, HV_FEATURE_REG_CLIDR_EL1);
+    cpu->dcz_blocksize = hvf_get_feature_reg(cfg, HV_FEATURE_REG_DCZID_EL0);
+    
+    set_feature(&cpu->env, ARM_FEATURE_V8);
+    set_feature(&cpu->env, ARM_FEATURE_NEON);
+    set_feature(&cpu->env, ARM_FEATURE_GENERIC_TIMER);
+    set_feature(&cpu->env, ARM_FEATURE_AARCH64);
+    set_feature(&cpu->env, ARM_FEATURE_CBAR_RO);
+    set_feature(&cpu->env, ARM_FEATURE_EL2);
+    set_feature(&cpu->env, ARM_FEATURE_EL3);
+    set_feature(&cpu->env, ARM_FEATURE_PMU);
 }
 
 void hvf_kick_vcpu_thread(CPUState *cpu)
