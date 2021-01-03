@@ -697,4 +697,7 @@ static inline int ios_does_not_support_system(const char *command)
 }
 #endif /* CONFIG_IOS */
 
+void qemu_thread_jit_write(void);
+void qemu_thread_jit_execute(void);
+
 #endif
