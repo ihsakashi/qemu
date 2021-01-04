@@ -49,6 +49,7 @@
 #include "hw/boards.h"
 #endif
 
+#include "tcg/tcg-apple-jit.h"
 #include "tcg/tcg-op.h"
 
 #if UINTPTR_MAX == UINT32_MAX
