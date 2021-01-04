@@ -39,6 +39,10 @@ extern int madvise(char *, size_t, int);
 #include "qemu/error-report.h"
 #include "monitor/monitor.h"
 
+#ifdef CONFIG_DARWIN
+#include "tcg/tcg-apple-jit.h"
+#endif
+
 static bool fips_enabled = false;
 
 static const char *hw_version = QEMU_HW_VERSION;
@@ -607,11 +611,11 @@ writev(int fd, const struct iovec *iov, int iov_cnt)
 }
 #endif
 
-#if defined(__APPLE__) && defined(MAC_OS_VERSION_11_0)
+#if defined(CONFIG_DARWIN)
 static inline void qemu_thread_jit_write_protect(bool enabled)
 {
-    if (pthread_jit_write_protect_supported_np()) {
-        pthread_jit_write_protect_np(enabled);
+    if (jit_write_protect_supported()) {
+        jit_write_protect(enabled);
     }
 }
 
