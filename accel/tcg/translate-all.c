@@ -1297,7 +1297,9 @@ static bool alloc_code_gen_buffer(size_t size, int splitwx, Error **errp)
     prot = PROT_READ | PROT_WRITE;
 #elif defined(CONFIG_DARWIN)
     /* Applicable to both iOS and macOS (Apple Silicon). */
-    flags |= MAP_JIT;
+    if (!splitwx) {
+        flags |= MAP_JIT;
+    }
 #endif
 
     return alloc_code_gen_buffer_anon(size, prot, flags, errp);
