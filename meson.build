@@ -2217,14 +2217,31 @@ foreach target : target_dirs
   arch_srcs += target_specific.sources()
   arch_deps += target_specific.dependencies()
 
-  lib = static_library('qemu-' + target,
+  if get_option('shared_lib')
+    build_lib_args = {
+      'target_type': 'shared_library',
+      'install': true,
+      'dependencies': arch_deps + deps,
+      'link_language': link_language,
+      'link_depends': [block_syms, qemu_syms],
+      'link_args': link_args + cc.get_supported_link_arguments(['-Wl,-U,_qemu_main'])
+    }
+  else
+    build_lib_args = {
+      'target_type': 'static_library',
+      'install': false,
+      'dependencies': arch_deps,
+      'name_suffix': 'fa'
+    }
+  endif
+
+  lib = build_target('qemu-' + target,
                  sources: arch_srcs + genh,
-                 dependencies: arch_deps,
                  objects: objects,
                  include_directories: target_inc,
                  c_args: c_args,
                  build_by_default: false,
-                 name_suffix: 'fa')
+                 kwargs: build_lib_args)
 
   if target.endswith('-softmmu')
     execs = [{
@@ -2258,6 +2275,17 @@ foreach target : target_dirs
       'dependencies': []
     }]
   endif
+  if get_option('shared_lib')
+    build_exe_args = {
+      'link_with': lib,
+      'link_args': link_args + cc.get_supported_link_arguments(['-Wl,--exclude-libs,ALL'])
+    }
+  else
+    build_exe_args = {
+      'objects': lib.extract_all_objects(recursive: true),
+      'link_args': link_args
+    }
+  endif
   foreach exe: execs
     exe_name = exe['name']
     exe_sign = 'CONFIG_HVF' in config_target
@@ -2269,11 +2297,10 @@ foreach target : target_dirs
                install: true,
                c_args: c_args,
                dependencies: arch_deps + deps + exe['dependencies'],
-               objects: lib.extract_all_objects(recursive: true),
                link_language: link_language,
                link_depends: [block_syms, qemu_syms] + exe.get('link_depends', []),
-               link_args: link_args,
-               gui_app: exe['gui'])
+               gui_app: exe['gui'],
+               kwargs: build_exe_args)
 
     if exe_sign
       emulators += {exe['name'] : custom_target(exe['name'],
@@ -2440,6 +2467,7 @@ endif
 summary_info += {'Doc directory':     get_option('docdir')}
 summary_info += {'Build directory':   meson.current_build_dir()}
 summary_info += {'Source path':       meson.current_source_dir()}
+summary_info += {'build shared lib':  get_option('shared_lib')}
 summary_info += {'GIT submodules':    config_host['GIT_SUBMODULES']}
 summary(summary_info, bool_yn: true, section: 'Directories')
 

@@ -463,6 +463,7 @@ gettext="auto"
 fuse="auto"
 fuse_lseek="auto"
 multiprocess="auto"
+shared_lib="false"
 
 malloc_trim="auto"
 gio="$default_feature"
@@ -1568,6 +1569,10 @@ for opt do
   ;;
   --disable-slirp-smbd) slirp_smbd=no
   ;;
+  --enable-shared-lib) shared_lib=true
+  ;;
+  --disable-shared-lib) shared_lib=false
+  ;;
   *)
       echo "ERROR: unknown option $opt"
       echo "Try '$0 --help' for more information"
@@ -1795,6 +1800,7 @@ Advanced options (experts only):
                            enable plugins via shared library loading
   --disable-containers     don't use containers for cross-building
   --gdb=GDB-path           gdb to use for gdbstub tests [$gdb_bin]
+  --enable-shared-lib      build QEMU as a shared library
 
 Optional features, enabled with --enable-FEATURE and
 disabled with --disable-FEATURE, default is enabled if available
@@ -6363,7 +6369,11 @@ echo "ranlib = [$(meson_quote $ranlib)]" >> $cross
 if has $sdl2_config; then
   echo "sdl2-config = [$(meson_quote $sdl2_config)]" >> $cross
 fi
-echo "strip = [$(meson_quote $strip)]" >> $cross
+if test "$shared_lib" = "true"; then
+  echo "strip = [$(meson_quote $strip), '-x']" >> $cross
+else
+  echo "strip = [$(meson_quote $strip)]" >> $cross
+fi
 echo "windres = [$(meson_quote $windres)]" >> $cross
 if test "$cross_compile" = "yes"; then
     cross_arg="--cross-file config-meson.cross"
@@ -6445,7 +6455,7 @@ NINJA=$ninja $meson setup \
         -Dvhost_user_blk_server=$vhost_user_blk_server -Dmultiprocess=$multiprocess \
         -Dfuse=$fuse -Dfuse_lseek=$fuse_lseek -Dguest_agent_msi=$guest_agent_msi \
         $(if test "$default_features" = no; then echo "-Dauto_features=disabled"; fi) \
-	-Dtcg_interpreter=$tcg_interpreter \
+	-Dtcg_interpreter=$tcg_interpreter -Dshared_lib=$shared_lib \
         $cross_arg \
         "$PWD" "$source_path"
 

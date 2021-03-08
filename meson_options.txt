@@ -6,6 +6,8 @@ option('qemu_firmwarepath', type : 'string', value : '',
        description: 'search PATH for firmware files')
 option('sphinx_build', type : 'string', value : '',
        description: 'Use specified sphinx-build [$sphinx_build] for building document (default to be empty)')
+option('shared_lib', type : 'boolean', value : false,
+       description: 'build QEMU as a shared library')
 
 option('default_devices', type : 'boolean', value : true,
        description: 'Include a default selection of devices in emulators')
