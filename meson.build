@@ -58,6 +58,7 @@ python = import('python').find_installation()
 supported_oses = ['windows', 'freebsd', 'netbsd', 'openbsd', 'darwin', 'sunos', 'linux']
 supported_cpus = ['ppc', 'ppc64', 's390x', 'riscv32', 'riscv64', 'x86', 'x86_64',
   'arm', 'aarch64', 'mips', 'mips64', 'sparc', 'sparc64']
+tcti_supported_cpus = ['aarch64']
 
 cpu = host_machine.cpu_family()
 targetos = host_machine.system()
@@ -248,6 +249,25 @@ if not get_option('tcg').disabled()
   endif
   if get_option('tcg_interpreter')
     tcg_arch = 'tci'
+  elif get_option('tcg_threaded_interpreter')
+    if cpu not in tcti_supported_cpus
+      error('Unsupported CPU @0@ for TCTI, try --enable-tcg-interpreter'.format(cpu))
+    else
+      warning('TCTI is extremely experimental and incomplete! Things might break!')
+      tcg_arch = '@0@-tcti'.format(cpu)
+    endif
+
+    # Tell our compiler how to generate our TCTI gadgets.
+    gadget_generator = 'tcg/@0@/tcti-gadget-gen.py'.format(tcg_arch)
+    tcti_gadgets = custom_target('tcti-gadgets.c.inc',
+                                output: 'tcti-gadgets.c.inc',
+                                input: gadget_generator,
+                                command: [find_program(gadget_generator), '@OUTPUT@'],
+                                build_by_default: true,
+                                build_always_stale: false)
+
+    genh += tcti_gadgets
+    
   elif config_host['ARCH'] == 'sparc64'
     tcg_arch = 'sparc'
   elif config_host['ARCH'] == 's390x'
@@ -1284,6 +1304,8 @@ foreach target : target_dirs
       config_all += { sym: 'y' }
       if sym == 'CONFIG_TCG' and tcg_arch == 'tci'
         config_target += { 'CONFIG_TCG_INTERPRETER': 'y' }
+      elif sym == 'CONFIG_TCG' and tcg_arch.endswith('tcti')
+        config_target += { 'CONFIG_TCG_THREADED_INTERPRETER': 'y' }
       elif sym == 'CONFIG_XEN' and have_xen_pci_passthrough
         config_target += { 'CONFIG_XEN_PCI_PASSTHROUGH': 'y' }
       endif
@@ -2575,6 +2597,8 @@ summary_info += {'TCG support':       config_all.has_key('CONFIG_TCG')}
 if config_all.has_key('CONFIG_TCG')
   if get_option('tcg_interpreter')
     summary_info += {'TCG backend':   'TCI (TCG with bytecode interpreter, experimental and slow)'}
+  elif get_option('tcg_threaded_interpreter')
+    summary_info += {'TCG backend':   'TCTI (TCG with threaded-dispatch bytecode interpreter, experimental and slow; but faster than TCI)'}
   else
     summary_info += {'TCG backend':   'native (@0@)'.format(cpu)}
   endif
