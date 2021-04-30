@@ -49,8 +49,8 @@ def simple(name, *lines):
 
     # Create our C/ASM framing.
     #print(f"__attribute__((naked)) static void gadget_{name}(void)")
-    print(f"__attribute__((naked)) void gadget_{name}(void);")
-    print(f"__attribute__((naked)) void gadget_{name}(void)")
+    print(f"__attribute__((naked)) static void gadget_{name}(void);")
+    print(f"__attribute__((naked)) static void gadget_{name}(void)")
     print("{")
 
     # Add the core gadget
@@ -113,7 +113,7 @@ def with_dnm(name, *lines):
     with_register_substitutions(name, ("d", "n", "m"), *lines)
 
     # Print out an array that contains all of our gadgets, for lookup.
-    print(f"void* gadget_{name}[{TCG_REGISTER_COUNT}][{TCG_REGISTER_COUNT}][{TCG_REGISTER_COUNT}] = ", end="")
+    print(f"static void* gadget_{name}[{TCG_REGISTER_COUNT}][{TCG_REGISTER_COUNT}][{TCG_REGISTER_COUNT}] = ", end="")
     print("{")
 
     # D array
@@ -138,7 +138,7 @@ def with_dn_immediate(name, *lines, immediate_range):
     with_register_substitutions(name, ["d", "n"], *lines, immediate_range=immediate_range)
 
     # Print out an array that contains all of our gadgets, for lookup.
-    print(f"void* gadget_{name}[{TCG_REGISTER_COUNT}][{TCG_REGISTER_COUNT}][{len(immediate_range)}] = ", end="")
+    print(f"static void* gadget_{name}[{TCG_REGISTER_COUNT}][{TCG_REGISTER_COUNT}][{len(immediate_range)}] = ", end="")
     print("{")
 
     # D array
@@ -163,7 +163,7 @@ def with_pair(name, substitutions, *lines):
     with_register_substitutions(name, substitutions, *lines)
 
     # Print out an array that contains all of our gadgets, for lookup.
-    print(f"void* gadget_{name}[{TCG_REGISTER_COUNT}][{TCG_REGISTER_COUNT}] = ", end="")
+    print(f"static void* gadget_{name}[{TCG_REGISTER_COUNT}][{TCG_REGISTER_COUNT}] = ", end="")
     print("{")
 
     # N array
@@ -228,7 +228,7 @@ def with_single(name, substitution, *lines):
     with_register_substitutions(name, (substitution,), *lines)
 
     # Print out an array that contains all of our gadgets, for lookup.
-    print(f"void* gadget_{name}[{TCG_REGISTER_COUNT}] = ", end="")
+    print(f"static void* gadget_{name}[{TCG_REGISTER_COUNT}] = ", end="")
     print("{")
 
     for n in TCG_REGISTER_NUMBERS:
@@ -242,7 +242,7 @@ def with_d_immediate(name, *lines, immediate_range=range(0)):
     with_register_substitutions(name, ['d'], *lines, immediate_range=immediate_range)
 
     # Print out an array that contains all of our gadgets, for lookup.
-    print(f"void* gadget_{name}[{TCG_REGISTER_COUNT}][{len(immediate_range)}] = ", end="")
+    print(f"static void* gadget_{name}[{TCG_REGISTER_COUNT}][{len(immediate_range)}] = ", end="")
     print("{")
 
     # D array
